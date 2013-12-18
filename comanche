@@ -1,0 +1,131 @@
+#!/usr/bin/perl
+
+
+# Handler sur la mort des fils
+$SIG{'CHLD'} = sub {
+	$i --;
+	wait();
+};
+
+
+# Handler de terminaison du programme
+$SIG{'USR1'} = sub {
+	writelog("stop");
+	close( SOCKET );
+	exit 0;
+};
+
+
+use Socket;
+
+
+# Ecriture dans le fichier log
+sub writelog {
+	my ($mode) = @_;
+	if( $mode ne "") {
+		
+		# Si lancement ou fermeture du serveur
+		$date = time;
+		$machine = "local";
+		$type = $mode;
+		$requete = $port;
+		$projection = "";
+		$reponse = "";
+	}
+	
+	# Ecriture dans le log
+	my $line = "$date;$type;$machine;$requete;$projection;$reponse\n";
+	open( LOG, ">>$logfile" );
+	print LOG $line;
+	close( LOG );
+}
+
+
+# Test sur le parametre
+if( $ARGV[0] eq "start" ) {
+	
+	# Si lancement du serveur
+	$pid = fork();
+	if( defined $pid && $pid != 0 ) {
+		open( PID, ">pid" );
+		print PID $pid;
+		close( PID );
+		exit 0;
+	}
+} elsif ( $ARGV[0] eq "stop" ) {
+	
+	# Si fermeture
+	open( PID, "pid" );
+	kill( 'USR1', <PID> );
+	close( PID );
+	exit 0;
+} else {
+	
+	# Si pas d'argument
+	exit 1;
+}
+
+
+# Configuration de base
+$port = "7777";
+$default = "/var/www/index.html";
+$index = "index.html";
+$logfile = "comanche.log";
+$clients = 5;
+# $basedir = "/var/www";
+
+
+# Creation du logfile si aucun
+open( LOG, ">>$logfile" );
+close( LOG );
+
+
+# Initialisation du serveur
+socket( SOCKET, PF_INET, SOCK_STREAM, getprotobyname( 'tcp' ) );
+setsockopt( SOCKET, SOL_SOCKET, SO_REUSEADDR, 1 ) || die( 'setsockopt' );
+
+$addr = sockaddr_in ($port, INADDR_ANY);
+
+
+# Lancement du serveur
+bind( SOCKET, $addr ) || die( 'bind' );
+listen( SOCKET, SOMAXCONN ) || die( 'listen' );
+
+
+# Ecriture du demarrage dans le log
+writelog("start");
+
+
+# Boucle principale du serveur
+while( accept( CLIENT, SOCKET ) || die( 'accept' ) ) {
+	
+	# Test du nombre de fils
+	if ( $i >= $clients ) {
+		wait();
+	}
+	
+	# Creation d'un fils pour le client
+    $pid = fork();
+    
+    if( defined $pid && $pid == 0 ) {
+		
+		# Traitement du client par le fils
+        select CLIENT;
+        autoflush CLIENT 1;
+        
+		while( <CLIENT> ) {
+			print CLIENT $_;
+		}
+				
+	    close( CLIENT );
+		
+		exit 0;
+		
+	} elsif( defined $pid ) {
+		
+		# Fermeture du client dans le père, qui retourne à ses activités
+	    close( CLIENT );
+	}
+	
+	print "Encore en vie : $$ ! Haha !\n";
+}
