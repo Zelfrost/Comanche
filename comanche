@@ -71,7 +71,7 @@ if( $ARGV[0] eq "start" ) {
 
 
 # Configuration de base
-$port = "7777";
+$port = "7070";
 $default = "/var/www/index.html";
 $index = "index.html";
 $logfile = "comanche.log";
