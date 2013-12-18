@@ -111,25 +111,21 @@ while( accept( CLIENT, SOCKET ) || die( 'accept' ) ) {
 	# Creation d'un fils pour le client
     $pid = fork();
     
-    if( defined $pid && $pid == 0 ) {
+    if( $pid == 0 ) {
 		
 		# Traitement du client par le fils
         select CLIENT;
-        autoflush CLIENT 1;
-        
-		while( <CLIENT> ) {
-			print CLIENT $_;
-		}
-				
+        $|= 1;
+		
+		$req = <CLIENT>;
+		while( <CLIENT> =~ /^\r?\n/ ) {  }
+		print STDOUT $req;
+		
+		print "HTTP/1.1 200 OK\n";
+		
 	    close( CLIENT );
 		
 		exit 0;
 		
-	} elsif( defined $pid ) {
-		
-		# Fermeture du client dans le père, qui retourne à ses activités
-	    close( CLIENT );
 	}
-	
-	print "Encore en vie : $$ ! Haha !\n";
 }
