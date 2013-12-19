@@ -26,7 +26,7 @@ use Socket;
 # Ecriture dans le fichier log
 sub writelog {
 	my ($mode) = @_;
-	if( $mode ne "") {
+	if( $mode eq "start" or $mode eq "stop" ) {
 		
 		# Si lancement ou fermeture du serveur
 		$date = time;
@@ -35,6 +35,13 @@ sub writelog {
 		$requete = $port;
 		$projection = "";
 		$reponse = "";
+	} else {
+	    $date = time;
+	    $machine = shift;
+	    $type = shift;
+	    $requete = shift;
+	    $projection = shift;
+	    $reponse = shift;
 	}
 	
 	# Ecriture dans le log
@@ -76,7 +83,7 @@ $default = "/var/www/index.html";
 $index = "index.html";
 $logfile = "comanche.log";
 $clients = 5;
-# $basedir = "/var/www";
+$basedir = "/var/www";
 
 
 # Creation du logfile si aucun
@@ -120,12 +127,30 @@ while( 1 ) {
 		
 		$req = <CLIENT>;
 		while( <CLIENT> =~ /^\r?\n/ ) {}
-		print STDOUT $req;
+		$req =~ /^GET \/(.*) HTTP\/1\.1/;# || err400;
+        $req = $1;
+        
+        # Recherche dans le repertoire de base
+        if( -e "$basedir\/$req" ) {
+            open(FILE, "$basedir\/$req");
+            
+            while( <FILE> ) {
+                $reponse = $reponse.$_;
+            }
+            
+            close(FILE);
+        } else {
+            
+            # Si aucun fichier trouvé
+            $reponse = "Not found";
+            #err404();
+        }
+		
 		
 		print "HTTP/1.1 200 OK\r\n" .
                 "Content-Type: text/html\r\n" .
-                "Content-Length: 13\r\n\r\n" .
-                "Coucou Haha !";
+                "Content-Length: length($reponse)\r\n\r\n" .
+                $reponse;
 		
 	    close( CLIENT );
 		
