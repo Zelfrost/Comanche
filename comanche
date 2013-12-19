@@ -101,7 +101,8 @@ writelog("start");
 
 
 # Boucle principale du serveur
-while( accept( CLIENT, SOCKET ) || die( "accept : $! from : $$" ) ) {
+while( 1 ) {
+    accept( CLIENT, SOCKET );
 	
 	# Test du nombre de fils
 	if ( $i >= $clients ) {
@@ -110,7 +111,6 @@ while( accept( CLIENT, SOCKET ) || die( "accept : $! from : $$" ) ) {
 	
 	# Creation d'un fils pour le client
     $pid = fork();
-	print "I know : $pid !\n";
     
     if( $pid == 0 ) {
 		
@@ -119,18 +119,23 @@ while( accept( CLIENT, SOCKET ) || die( "accept : $! from : $$" ) ) {
         $|= 1;
 		
 		$req = <CLIENT>;
-		while( <CLIENT> =~ /^\r?\n/ ) {  }
+		while( <CLIENT> =~ /^\r?\n/ ) {}
 		print STDOUT $req;
 		
-		print "HTTP/1.1 200 OK\n";
+		print "HTTP/1.1 200 OK\r\n" .
+                "Content-Type: text/html\r\n" .
+                "Content-Length: 13\r\n\r\n" .
+                "Coucou Haha !";
 		
 	    close( CLIENT );
 		
 		exit 0;
 		
-	} else {
-		close( CLIENT );
-		print "I'm your father !\n";
 	}
-	print "Ah que coucou !\n";
+	
+	close( CLIENT );
+
 }
+
+close( CLIENT );
+close( SOCKET );
