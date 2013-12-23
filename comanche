@@ -96,12 +96,12 @@ sub err400
                 "<h3>400 Bad Request</h3>".
                 "Votre requête n'est pas valide".
                 "</body></html>";
-    resp("404 Bad Request");
+    resp("404 Bad Request", "text/html");
 }
 
 sub err404
 {
-    respFile($default, "404 Not Found");
+    respFile($default, "404 Not Found", "text/html");
 }
 
 # param :
@@ -109,7 +109,7 @@ sub err404
 #   - http status
 sub respBaseFile
 {
-    respFile("$basedir\/".shift, "200 OK");
+    respFile("$basedir\/".shift, "200 OK", shift);
 }
 
 # param :
@@ -125,7 +125,7 @@ sub respFile
     
     close(FILE);
     
-    resp(shift);
+    resp(shift, shift);
 }
 
 # param :
@@ -133,7 +133,7 @@ sub respFile
 sub resp
 {
     $full_response = "HTTP/1.1 ".shift."\r\n" .
-        "Content-Type: text/html\r\n" .
+        "Content-Type: ".shift."\r\n" .
         "Content-Length: ".length($reponse)."\r\n\r\n" .
         $reponse;
 }
@@ -211,14 +211,21 @@ while( 1 ) {
         $|= 1;
 		
 		$req = <CLIENT>;
-		$req =~ /^GET \/(.*) HTTP\/1\.1/ || err400;
-        $req = $1;
+		$req =~ /^GET \/(.*)\.(.*) HTTP\/1\.1/ || err400;
+        $req = "$1.$2";
         
         # Recherche dans le repertoire de base
-        if( -f "$basedir\/$req" ) {
-            
+        if( -f "$basedir\/$req" && ( $2 eq "html" || $2 eq "txt" || $2 eq "jpg" ) ) {
+        
             # Si un fichier correspond
-            respBaseFile($req);
+            $type = "text/html";
+            if( $2 eq "jpg" ) {
+                $type = "image/jpeg";
+            } elsif( $2 eq "txt" ) {
+                $type = "text/plain";
+            }
+            
+            respBaseFile($req, $type);
         } else {
             
             # Si aucun fichier correspondant
