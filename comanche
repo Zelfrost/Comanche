@@ -21,6 +21,7 @@ $SIG{'USR1'} = sub {
 
 
 use Socket;
+use File::MimeInfo;
 
 # Fonction de lecture du fichier de configuration
 sub defConfig
@@ -218,12 +219,7 @@ while( 1 ) {
         if( -f "$basedir\/$req" && ( $2 eq "html" || $2 eq "txt" || $2 eq "jpg" ) ) {
         
             # Si un fichier correspond
-            $type = "text/html";
-            if( $2 eq "jpg" ) {
-                $type = "image/jpeg";
-            } elsif( $2 eq "txt" ) {
-                $type = "text/plain";
-            }
+            $type = mimetype($req);
             
             respBaseFile($req, $type);
         } else {
