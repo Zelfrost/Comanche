@@ -22,9 +22,42 @@ $SIG{'USR1'} = sub {
 
 use Socket;
 
+# Fonction de lecture du fichier de configuration
+sub defConfig
+{
+    open(CONFIG,"comanche.conf");
+    
+    while (<CONFIG>) {
 
-# Ecriture dans le fichier log
-sub writelog {
+	    # récupération des routes dans la liste route
+	    if (/route/) {
+	        @lignes = split(" ",$_);
+	        @route = ($lignes[1],$lignes[3]);
+	    }
+	    
+	    # récuperation des executions dans la liste exe
+	    if (/exec/) {
+	        @lignes = split(" ",$_);
+	        @exe = ($lignes[1],$lignes[3]);
+	    }
+        
+        # récuperation des variables
+	    if (/^set\s+(.+)\s+(.+)/) {
+	        if( $1 eq "port" ) {
+	            die( "Port incorrect dans le .conf\n" ) unless ( $2 >= 1 && $2<=65535 );
+	        } elsif( $1 eq "default" ) {
+	            die( "Nombre de clients incorrect dans le .conf\n" ) unless ( -f $2 );
+	        }
+	        ${$1}= $2;
+	    } 
+    }
+    
+    close(CONFIG);
+}
+
+# Fonction d'écriture dans le fichier log
+sub writelog
+{
 	my ($mode) = @_;
 	if( $mode eq "start" or $mode eq "stop" ) {
 		
@@ -52,6 +85,65 @@ sub writelog {
 }
 
 
+###############################################
+##           Fonctions de réponses           ##
+###############################################
+
+
+sub err400
+{
+    $reponse =  "<html><body>".
+                "<h3>400 Bad Request</h3>".
+                "Votre requête n'est pas valide".
+                "</body></html>";
+    resp("404 Bad Request");
+}
+
+sub err404
+{
+    respFile($default, "404 Not Found");
+}
+
+# param :
+#   - file name
+#   - http status
+sub respBaseFile
+{
+    respFile("$basedir\/".shift, "200 OK");
+}
+
+# param :
+#   - file full path
+#   - http status
+sub respFile
+{
+    open(FILE, shift);
+    
+    while( <FILE> ) {
+        $reponse = $reponse.$_;
+    }
+    
+    close(FILE);
+    
+    resp(shift);
+}
+
+# param :
+#   - http status
+sub resp
+{
+    $full_response = "HTTP/1.1 ".shift."\r\n" .
+        "Content-Type: text/html\r\n" .
+        "Content-Length: ".length($reponse)."\r\n\r\n" .
+        $reponse;
+}
+
+
+###############################################
+##               Code principal              ##
+###############################################
+
+
 # Test sur le parametre
 if( $ARGV[0] eq "start" ) {
 	
@@ -65,7 +157,7 @@ if( $ARGV[0] eq "start" ) {
 	}
 } elsif ( $ARGV[0] eq "stop" ) {
 	
-	# Si fermeture
+	# Si arrêt du serveur
 	open( PID, "pid" );
 	kill( 'USR1', <PID> );
 	close( PID );
@@ -77,14 +169,7 @@ if( $ARGV[0] eq "start" ) {
 }
 
 
-# Configuration de base
-$port = "7070";
-$default = "/var/www/index.html";
-$index = "index.html";
-$logfile = "comanche.log";
-$clients = 5;
-$basedir = "/var/www";
-
+defConfig();
 
 # Creation du logfile si aucun
 open( LOG, ">>$logfile" );
@@ -126,29 +211,21 @@ while( 1 ) {
         $|= 1;
 		
 		$req = <CLIENT>;
-		$req =~ /^GET \/(.*) HTTP\/1\.1/;# || err400;
+		$req =~ /^GET \/(.*) HTTP\/1\.1/ || err400;
         $req = $1;
         
         # Recherche dans le repertoire de base
-        if( -e "$basedir\/$req" ) {
-            open(FILE, "$basedir\/$req");
+        if( -f "$basedir\/$req" ) {
             
-            while( <FILE> ) {
-                $reponse = $reponse.$_;
-            }
-            
-            close(FILE);
+            # Si un fichier correspond
+            respBaseFile($req);
         } else {
             
-            # Si aucun fichier trouvé
-            $reponse = "Not found";
-            #err404();
+            # Si aucun fichier correspondant
+            err404();
         }
 		
-		print "HTTP/1.1 200 OK\r\n" .
-                "Content-Type: text/html\r\n" .
-                "Content-Length: ".length($reponse)."\r\n\r\n" .
-                $reponse;
+		print $full_response;
 		
 	    close( CLIENT );
 		
