@@ -31,19 +31,19 @@ sub defConfig
     while (<CONFIG>) {
 
 	    # récupération des routes dans la liste route
-	    if (/route/) {
+	    if( /route/ ) {
 	        @lignes = split(" ",$_);
 	        @route = ($lignes[1],$lignes[3]);
 	    }
 	    
 	    # récuperation des executions dans la liste exe
-	    if (/exec/) {
+	    if( /exec/ ) {
 	        @lignes = split(" ",$_);
 	        @exe = ($lignes[1],$lignes[3]);
 	    }
         
         # récuperation des variables
-	    if (/^set\s+(.+)\s+(.+)/) {
+	    if( /^set\s+(.+)\s+(.+)/ ) {
 	        if( $1 eq "port" ) {
 	            die( "Port incorrect dans le .conf\n" ) unless ( $2 >= 1 && $2<=65535 );
 	        } elsif( $1 eq "default" ) {
@@ -111,6 +111,32 @@ sub err404
 sub respBaseFile
 {
     respFile("$basedir\/".shift, "200 OK", shift);
+}
+
+# param :
+#   - path
+sub respListFile
+{
+    $dir = shift;
+    $dir =~ /.*\/(.+)/;
+    
+    $reponse =  "<html><head><link rel='stylesheet' href='listFile.css' /></head><body>".
+                "<h2>$1</h2>".
+                "<ul>";
+    
+    opendir( REP, "$basedir\/$dir" );
+    for $f ( sort readdir( REP ) ) {
+        if( -d "$basedir\/$dir\/$f" ) {
+            $class = " class='dossier' ";
+        } else {
+            $class = "";
+        }
+        $reponse .= "<li $class><a $class href='$dir/$f'>$f</a></li>";
+    }
+    
+    $reponse .= "</ul>".
+                "</body></html>";
+    resp( "200 OK", "text/html" );
 }
 
 # param :
@@ -212,11 +238,12 @@ while( 1 ) {
         $|= 1;
 		
 		$req = <CLIENT>;
-		$req =~ /^GET \/(.*)\.(.*) HTTP\/1\.1/ || err400;
-        $req = "$1.$2";
+		$req =~ /^GET \/(.*) HTTP\/1\.1/ || err400;
+        $req = $1;
+        $req =~ /.+\.(.+)/;
         
         # Recherche dans le repertoire de base
-        if( -f "$basedir\/$req" && ( $2 eq "html" || $2 eq "txt" || $2 eq "jpg" ) ) {
+        if( -f "$basedir\/$req" && ( $1 eq "html" || $1 eq "txt" || $1 eq "jpg" || $1 eq "css" ) ) {
         
             # Si un fichier correspond
             $type = mimetype($req);
@@ -224,8 +251,12 @@ while( 1 ) {
             respBaseFile($req, $type);
         } else {
             
-            # Si aucun fichier correspondant
-            err404();
+            # Si aucun fichier ne correspond
+            if( -d "$basedir\/$req" ) {
+                respListFile($req);
+            } else {
+                err404();
+            }
         }
 		
 		print $full_response;
