@@ -23,161 +23,6 @@ $SIG{'USR1'} = sub {
 use Socket;
 use File::MimeInfo;
 
-# Fonction de lecture du fichier de configuration
-sub defConfig
-{
-    open(CONFIG,"comanche.conf");
-    
-    while (<CONFIG>) {
-
-	    # récupération des routes dans la liste route
-	    if( /route/ ) {
-	        @lignes = split(" ",$_);
-	        @route = ($lignes[1],$lignes[3]);
-	    }
-	    
-	    # récuperation des executions dans la liste exe
-	    if( /exec/ ) {
-	        @lignes = split(" ",$_);
-	        @exe = ($lignes[1],$lignes[3]);
-	    }
-        
-        # récuperation des variables
-	    if( /^set\s+(.+)\s+(.+)/ ) {
-	        if( $1 eq "port" ) {
-	            die( "Port incorrect dans le .conf\n" ) unless ( $2 >= 1 && $2<=65535 );
-	        } elsif( $1 eq "default" ) {
-	            die( "Nombre de clients incorrect dans le .conf\n" ) unless ( -f $2 );
-	        }
-	        ${$1}= $2;
-	    } 
-    }
-    
-    close(CONFIG);
-}
-
-# Fonction d'écriture dans le fichier log
-sub writelog
-{
-	my ($mode) = @_;
-	if( $mode eq "start" or $mode eq "stop" ) {
-		
-		# Si lancement ou fermeture du serveur
-		$date = time;
-		$machine = "local";
-		$type = $mode;
-		$requete = $port;
-		$projection = "";
-		$reponse = "";
-	} else {
-	    $date = time;
-	    $machine = shift;
-	    $type = shift;
-	    $requete = shift;
-	    $projection = shift;
-	    $reponse = shift;
-	}
-	
-	# Ecriture dans le log
-	my $line = "$date;$type;$machine;$requete;$projection;$reponse\n";
-	open( LOG, ">>$logfile" );
-	print LOG $line;
-	close( LOG );
-}
-
-
-###############################################
-##           Fonctions de réponses           ##
-###############################################
-
-
-sub err400
-{
-    $reponse =  "<html><body>".
-                "<h3>400 Bad Request</h3>".
-                "Votre requête n'est pas valide".
-                "</body></html>";
-    resp("404 Bad Request", "text/html");
-}
-
-sub err404
-{
-    respFile($default, "404 Not Found", "text/html");
-}
-
-# param :
-#   - file name
-#   - http status
-sub respBaseFile
-{
-    respFile("$basedir\/".shift, "200 OK", shift);
-}
-
-# param :
-#   - path
-sub respListFile
-{
-    $dir = shift;
-    $dir =~ /.*\/(.+)/;
-    
-    $reponse =  "<html><head><link rel='stylesheet' href='listFile.css' /></head><body>".
-                "<h2>$1</h2>".
-                "<ul>";
-    
-    opendir( REP, "$basedir\/$dir" );
-    for $f ( sort readdir( REP ) ) {
-        if( -d "$basedir\/$dir\/$f" ) {
-            $class = " class='dossier' ";
-        } else {
-            $class = "";
-        }
-        $reponse .= "<li $class><a $class href='$dir/$f'>$f</a></li>";
-    }
-    
-    $reponse .= "</ul>".
-                "</body></html>";
-    resp( "200 OK", "text/html" );
-}
-
-# param :
-#   - file to exec
-sub respExec {
-    $file = shift;
-    $reponse = "<html><body>".qx/$basedir\/$file/."</body></html>";
-    resp( "200 OK", "text/html" );
-}
-
-# param :
-#   - file full path
-#   - http status
-sub respFile
-{
-    open(FILE, shift);
-    
-    while( <FILE> ) {
-        $reponse = $reponse.$_;
-    }
-    
-    close(FILE);
-    
-    resp(shift, shift);
-}
-
-# param :
-#   - http status
-sub resp
-{
-    $full_response = "HTTP/1.1 ".shift."\r\n" .
-        "Content-Type: ".shift."\r\n" .
-        "Content-Length: ".length($reponse)."\r\n\r\n" .
-        $reponse;
-}
-
-
-###############################################
-##               Code principal              ##
-###############################################
-
 
 # Test sur le parametre
 if( $ARGV[0] eq "start" ) {
@@ -203,12 +48,17 @@ if( $ARGV[0] eq "start" ) {
 	exit 1;
 }
 
-
+# Lecture du fichier de configuration
 defConfig();
 
 # Creation du logfile si aucun
 open( LOG, ">>$logfile" );
 close( LOG );
+
+
+###############################################
+##               Code principal              ##
+###############################################
 
 
 # Initialisation du serveur
@@ -246,24 +96,10 @@ while( 1 ) {
         $|= 1;
 		
 		$req = <CLIENT>;
-		$req =~ /^GET \/(.*) HTTP\/1\.1/ || err400;
+		$req =~ /^GET (.*) HTTP\/1\.1/ || err400;
         $req = $1;
-        $req =~ /.+\.(.+)/;
         
-        # Recherche dans le repertoire de base
-        if( -f "$basedir\/$req" && ( $1 eq "html" || $1 eq "txt" || $1 eq "jpg" || $1 eq "css" ) ) {
-        
-            # Si un fichier correspond
-            $type = mimetype($req);
-            
-            respBaseFile($req, $type);
-        } elsif( -d "$basedir\/$req" ) {
-            respListFile($req);
-        } elsif( -x "$basedir\/$req" ) {
-            respExec($req);
-        } else {
-            err404();
-        }
+        traiterFichier();
 		
 		print $full_response;
 		
@@ -277,5 +113,192 @@ while( 1 ) {
 
 }
 
-close( CLIENT );
-close( SOCKET );
+
+###############################################
+##    Fonction de lecture du fichier conf    ##
+###############################################
+
+
+sub defConfig
+{
+    open(CONFIG,"comanche.conf");
+    
+    while (<CONFIG>) {
+
+	    # récupération des routes dans la liste route
+	    if( /route/ ) {
+	        @lignes = split(" ",$_);
+	        @route = ($lignes[1],$lignes[3]);
+	    }
+	    
+	    # récuperation des executions dans la liste exe
+	    if( /exec/ ) {
+	        @lignes = split(" ",$_);
+	        @exe = ($lignes[1],$lignes[3]);
+	    }
+        
+        # récuperation des variables
+	    if( /^set\s+(.+)\s+(.+)/ ) {
+	        if( $1 eq "port" ) {
+	            die( "Port incorrect dans le .conf\n" ) unless ( $2 >= 1 && $2<=65535 );
+	        } elsif( $1 eq "default" ) {
+	            die( "Nombre de clients incorrect dans le .conf\n" ) unless ( -f $2 );
+	        }
+	        ${$1}= $2;
+	    } 
+    }
+    
+    close(CONFIG);
+}
+
+
+###############################################
+##  Fonction d'écriture dans le fichier log  ##
+###############################################
+
+
+sub writelog
+{
+	my ($mode) = @_;
+	if( $mode eq "start" or $mode eq "stop" ) {
+		
+		# Si lancement ou fermeture du serveur
+		$date = time;
+		$machine = "local";
+		$type = $mode;
+		$requete = $port;
+		$projection = "";
+		$reponse = "";
+	} else {
+	    $date = time;
+	    $machine = shift;
+	    $type = shift;
+	    $requete = shift;
+	    $projection = shift;
+	    $reponse = shift;
+	}
+	
+	# Ecriture dans le log
+	my $line = "$date;$type;$machine;$requete;$projection;$reponse\n";
+	open( LOG, ">>$logfile" );
+	print LOG $line;
+	close( LOG );
+}
+
+
+###############################################
+##    Fonction de traitement de la requete   ##
+###############################################
+
+
+sub traiterFichier {
+    # Recherche dans le repertoire de base
+    $req =~ /.*\.(.*)/;
+    
+    if( -f "$basedir\/$req" && ( $1 eq "html" || $1 eq "txt" || $1 eq "jpg" || $1 eq "css" ) ) {
+    
+        # Si un fichier correspond
+        $type = mimetype($req);
+        respFile("$basedir\/$req", $type);
+    } elsif( -d "$basedir\/$req" ) {
+        if( -f "$basedir\/$req\/index.html" ) {
+            
+            # Si il y a un fichier index.html dans le dossier
+            respFile( "$basedir\/$req\/index.html" );
+        } else { 
+            
+            # Sinon
+            respListFile($req);
+        }
+    } elsif( -x "$basedir\/$req" ) {
+        respExec($req);
+    } else {
+        err404();
+    }
+}
+
+
+###############################################
+##           Fonctions de réponses           ##
+###############################################
+
+
+# Retourne un page d'erreur 400
+sub err400
+{
+    $reponse =  "<html><body>".
+                "<h3>400 Bad Request</h3>".
+                "Votre requête n'est pas valide".
+                "</body></html>";
+    resp("404 Bad Request", "text/html");
+}
+
+# Retourne la page de base en erreur 404
+sub err404
+{
+    respFile($default, "404 Not Found", "text/html");
+}
+
+# Crée une page répertoriant le contenu d'un dossier
+# param :
+#   - path
+sub respListFile
+{
+    $dir = shift;
+    
+    $reponse =  "<html><head><link rel='stylesheet' /></head><body>".
+                "<h2>$dir</h2>".
+                "<ul>";
+    
+    opendir( REP, "$basedir\/$dir" );
+    for $f ( sort readdir( REP ) ) {
+        $path = "$dir\/$f";
+        $path =~ s/\/\//\//g;
+        if( -d "$basedir\/$path" ) {
+            $class = " class='dossier' ";
+        } else {
+            $class = "";
+        }
+        $reponse .= "<li $class><a $class href='$path'>$f</a></li>";
+    }
+    
+    $reponse .= "</ul>".
+                "</body></html>";
+    resp( "200 OK", "text/html" );
+}
+
+# Exécute un script
+# param :
+#   - file to exec
+sub respExec {
+    $file = shift;
+    $reponse = "<html><body>".qx/$basedir\/$file/."</body></html>";
+    resp( "200 OK", "text/html" );
+}
+
+# Lit un fichier
+# param :
+#   - file full path
+#   - http status
+sub respFile
+{
+    open(FILE, shift);
+    
+    while( <FILE> ) {
+        $reponse = $reponse.$_;
+    }
+    
+    close(FILE);
+    
+    resp(shift, shift);
+}
+
+# param :
+#   - http status
+sub resp
+{
+    $full_response = "HTTP/1.1 ".shift."\r\n" .
+        "Content-Type: ".shift."\r\n" .
+        "Content-Length: ".length($reponse)."\r\n\r\n" .
+        $reponse;
+}
