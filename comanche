@@ -6,7 +6,7 @@
 
 
 # Handler sur la mort des fils
-$SIG{'CHLD'} = sub {
+$SIG{CHLD} = sub {
 	$i --;
 	wait();
 };
@@ -79,45 +79,67 @@ writelog("start");
 
 # Boucle principale du serveur
 while( 1 ) {
-    accept( CLIENT, SOCKET );
+    accept( CLIENT, SOCKET ) or next;
 	
 	# Test du nombre de fils
 	if ( $i >= $clients ) {
-		wait();
-	}
+		$reponse =  "<html><body>".
+		            "<h3>503 Service Unavailable</h3>".
+		            "Trop de connexions en simultannees".
+		            "</body></html>";
+        resp( "text/html", "503 Service Unavailable" );
+        writelog("get-s", "", "", "error", "503 Service Unavailable");
+		
+	    print $full_response;
 	
-	# Creation d'un fils pour le client
-    $pid = fork();
-    
-    if( $pid == 0 ) {
-		
-		# Traitement du client par le fils
-        select CLIENT;
-        $|= 1;
-		
-		$req = <CLIENT>;
-		$req =~ /^GET (.*) HTTP\/1\.1/ || err400;
-        $req = $1;
-        $req =~ /(.*)\?(.*)/;
-        $req = $2;
-        @param = split("&", $req);
-        for $p ( @param ) {
-            $p =~ /.*=(.*)/;
-            $parameter .= " $1";
-        }
-        $req = $1;
+        close( CLIENT );
+	} else {
+	
+	    # Creation d'un fils pour le client
+        $pid = fork();
         
-        traiterFichier();
+        if( $pid != 0 ) {
+            
+            # Incrémente le nombre de fils
+            $i ++;
+            close( CLIENT );
+        } else {
 		
-		print $full_response;
+		    # Traitement du client par le fils
+		    
+		    $client = getpeername(CLIENT);
+		    open( STDERR, ">/dev/null" );
+            ( $port, $iaddr ) = sockaddr_in( $client );
+            $ip = inet_ntoa( $iaddr );
 		
-	    close( CLIENT );
-		exit 0;
+            select CLIENT;
+            $|= 1;
 		
-	}
-	
-	close( CLIENT );
-
+		    $request = <CLIENT>;
+		    chop $request;
+		    chop $request;
+		    $request =~ /^GET (.*) HTTP\/1\.1/ || err400;
+            $req = $1;
+            $req =~ /(.*)\?(.*)/;
+            $req = $2;
+            @param = split("&", $req);
+            for $p ( @param ) {
+                $p =~ /.*=(.*)/;
+                $parameter .= " $1";
+            }
+            $req = $1;
+            $c = chop $req;
+            $req .= $c if( $c ne "/" );
+            
+            traiterFichier();
+		
+		    print $full_response;
+		
+	        close( CLIENT );
+		    exit 0;
+		
+	    }
+    }
 }
 
 
@@ -202,22 +224,22 @@ sub traiterFichier {
     # Recherche dans le repertoire de base
     $req =~ /.*\.(.*)/;
     
-    if( -f "$basedir\/$req" && ( $1 eq "html" || $1 eq "txt" || $1 eq "jpg" || $1 eq "css" ) ) {
+    if( -f "$basedir$req" && ( $1 eq "html" || $1 eq "txt" || $1 eq "jpg" || $1 eq "css" ) ) {
     
         # Si un fichier correspond
         $type = mimetype($req);
-        respFile("$basedir\/$req", $type);
-    } elsif( -d "$basedir\/$req" ) {
-        if( -f "$basedir\/$req\/index.html" ) {
+        respFile("$basedir$req", $type, "200 OK");
+    } elsif( -d "$basedir$req" ) {
+        if( -f "$basedir$req/"."index.html" ) {
             
             # Si il y a un fichier index.html dans le dossier
-            respFile( "$basedir\/$req\/index.html" );
-        } else { 
+            respFile( "$basedir$req/"."index.html", "text/html", "200 OK");
+        } else {
             
             # Sinon
             respListFile($req);
         }
-    } elsif( -x "$basedir\/$req" ) {
+    } elsif( -x "$basedir$req" ) {
         respExec($req);
     } else {
         err404();
@@ -238,12 +260,13 @@ sub err400
                 "Votre requête n'est pas valide".
                 "</body></html>";
     resp("404 Bad Request", "text/html");
+    writelog("get-s", "$ip", "$request", "error", "400 Bad Request");
 }
 
 # Retourne la page de base en erreur 404
 sub err404
 {
-    respFile($default, "404 Not Found", "text/html");
+    respFile($default, "text/html", "404 Not Found");
 }
 
 # Crée une page répertoriant le contenu d'un dossier
@@ -257,11 +280,10 @@ sub respListFile
                 "<h2>$dir</h2>".
                 "<ul>";
     
-    opendir( REP, "$basedir\/$dir" );
+    opendir( REP, "$basedir$dir" );
     for $f ( sort readdir( REP ) ) {
         $path = "$dir\/$f";
-        $path =~ s/\/\//\//g;
-        if( -d "$basedir\/$path" ) {
+        if( -d "$basedir$path" ) {
             $class = " class='dossier' ";
         } else {
             $class = "";
@@ -272,6 +294,7 @@ sub respListFile
     $reponse .= "</ul>".
                 "</body></html>";
     resp( "200 OK", "text/html" );
+    writelog("get-s", "$ip", "$request", "$basedir$req", "200 OK");
 }
 
 # Exécute un script
@@ -279,8 +302,9 @@ sub respListFile
 #   - file to exec
 sub respExec {
     $file = shift;
-    $reponse = "<html><body>".qx/$basedir\/$file$parameter/."</body></html>";
+    $reponse = "<html><body>".qx/$basedir$file$parameter/."</body></html>";
     resp( "200 OK", "text/html" );
+    writelog("get-d", "$ip", "$request", "$basedir$file", "200 OK");
 }
 
 # Lit un fichier
@@ -289,7 +313,8 @@ sub respExec {
 #   - http status
 sub respFile
 {
-    open(FILE, shift);
+    $file = shift;
+    open(FILE, $file);
     
     while( <FILE> ) {
         $reponse = $reponse.$_;
@@ -297,7 +322,10 @@ sub respFile
     
     close(FILE);
     
-    resp(shift, shift);
+    $type = shift;
+    $code = shift;
+    resp($type, $code);
+    writelog("get-s", "$ip", "$request", "$file", "$code");
 }
 
 # param :
