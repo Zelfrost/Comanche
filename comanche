@@ -98,13 +98,20 @@ while( 1 ) {
 		$req = <CLIENT>;
 		$req =~ /^GET (.*) HTTP\/1\.1/ || err400;
         $req = $1;
+        $req =~ /(.*)\?(.*)/;
+        $req = $2;
+        @param = split("&", $req);
+        for $p ( @param ) {
+            $p =~ /.*=(.*)/;
+            $parameter .= " $1";
+        }
+        $req = $1;
         
         traiterFichier();
 		
 		print $full_response;
 		
 	    close( CLIENT );
-		
 		exit 0;
 		
 	}
@@ -272,7 +279,7 @@ sub respListFile
 #   - file to exec
 sub respExec {
     $file = shift;
-    $reponse = "<html><body>".qx/$basedir\/$file/."</body></html>";
+    $reponse = "<html><body>".qx/$basedir\/$file$parameter/."</body></html>";
     resp( "200 OK", "text/html" );
 }
 
