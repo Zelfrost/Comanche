@@ -42,7 +42,15 @@ if( $ARGV[0] eq "start" ) {
 	kill( 'USR1', <PID> );
 	close( PID );
 	exit 0;
-} else {
+}
+elsif ( $ARGV[0] eq "status" ) {
+	
+	# Si demande du status de serveur
+	print "Nombre de requête traitées: $nbRequest\n";
+	exit O;
+	
+}
+ else {
 	
 	# Si pas d'argument
 	exit 1;
@@ -116,6 +124,7 @@ while( 1 ) {
             $|= 1;
 		
 		    $request = <CLIENT>;
+                    
 		    chop $request;
 		    chop $request;
 		    $request =~ /^GET (.*) HTTP\/1\.1/ || err400;
@@ -132,6 +141,7 @@ while( 1 ) {
             $req .= $c if( $c ne "/" );
             
             traiterFichier();
+		$nbRequest=$nbRequest+1;
 		
 		    print $full_response;
 		
