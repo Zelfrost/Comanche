@@ -171,7 +171,7 @@ sub defConfig
 	        if( $1 eq "port" ) {
 	            die( "Port incorrect dans le .conf\n" ) unless ( $2 >= 1 && $2<=65535 );
 	        } elsif( $1 eq "default" ) {
-	            die( "Nombre de clients incorrect dans le .conf\n" ) unless ( -f $2 );
+	            die( "Le fichier par défaut dans le .conf n'existe pas.\n" ) unless ( -f $2 );
 	        }
 	        ${$1}= $2;
 	    } 
