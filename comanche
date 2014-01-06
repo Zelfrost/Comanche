@@ -23,6 +23,9 @@ $SIG{'USR1'} = sub {
 use Socket;
 use File::MimeInfo;
 
+$reqrecues      = 0;
+$reqtraitees    = 0;
+
 
 # Test sur le parametre
 if( $ARGV[0] eq "start" ) {
@@ -46,7 +49,7 @@ if( $ARGV[0] eq "start" ) {
 elsif ( $ARGV[0] eq "status" ) {
 	
 	# Si demande du status de serveur
-	print "Nombre de requête traitées: $nbRequest\n";
+	print "Nombre de requête traitées:  $reqrecues\n";
 	exit O;
 	
 }
@@ -88,6 +91,7 @@ writelog("start");
 # Boucle principale du serveur
 while( 1 ) {
     accept( CLIENT, SOCKET ) or next;
+	$reqrecues += 1;
 	
 	# Test du nombre de fils
 	if ( $i >= $clients ) {
@@ -102,7 +106,7 @@ while( 1 ) {
 	
         close( CLIENT );
 	} else {
-	
+
 	    # Creation d'un fils pour le client
         $pid = fork();
         
@@ -141,7 +145,7 @@ while( 1 ) {
             $req .= $c if( $c ne "/" );
             
             traiterFichier();
-		$nbRequest=$nbRequest+1;
+
 		
 		    print $full_response;
 		
