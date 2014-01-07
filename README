@@ -1,0 +1,14 @@
+Utilisation:
+
+Pour lancer le serveur : ./comanche start
+Pour stopper le serveur: ./comanche stop
+Pour obtenir des informations sur le serveur en route : ./comanche status
+
+Pour changer la configuration du serveur il faut modifier le fichier .conf
+
+Ce qui n'a pas été fait : 
+
+Le changement de configuration pendant que le serveur est lancé
+Les routes dynamiques
+Supervision
+Basedir
