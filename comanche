@@ -8,7 +8,7 @@
 # Handler sur la mort des fils
 $SIG{CHLD} = sub {
 	$i --;
-	undef $pid[wait()];
+	wait();
 };
 
 
@@ -23,6 +23,7 @@ $SIG{'USR1'} = sub {
 # Handler de statut du programme
 $SIG{'USR2'} = sub {
     print STDOUT "Nombre de requêtes reçues : $reqrecues.\n";
+    print STDOUT "Nombre de requêtes traitées : $reqtraitees.\n";
 };
 
 
@@ -42,7 +43,6 @@ if( $ARGV[0] eq "start" ) {
 		open( PID, ">pid" );
 		print PID $pid;
 		close( PID );
-
 		exit 0;
 	}
 } elsif ( $ARGV[0] eq "stop" ) {
@@ -73,7 +73,7 @@ elsif ( $ARGV[0] eq "status" ) {
 defConfig();
 
 # Creation du logfile si aucun
-open( LOG, ">>".$conf{"general"}{"logfile"} );
+open( LOG, ">>$logfile" );
 close( LOG );
 
 
@@ -86,7 +86,7 @@ close( LOG );
 socket( SOCKET, PF_INET, SOCK_STREAM, getprotobyname( 'tcp' ) );
 setsockopt( SOCKET, SOL_SOCKET, SO_REUSEADDR, 1 ) || die( 'setsockopt' );
 
-$addr = sockaddr_in ($conf{'general'}{'port'}, INADDR_ANY);
+$addr = sockaddr_in ($port, INADDR_ANY);
 
 
 # Lancement du serveur
@@ -104,7 +104,7 @@ while( 1 ) {
 	$reqrecues ++;
 
 	# Test du nombre de fils
-	if ( $i >= $conf{'general'}{'clients'} ) {
+	if ( $i >= $clients ) {
 		$reponse =  "<html><body>".
 		            "<h3>503 Service Unavailable</h3>".
 		            "Trop de connexions en simultannees".
@@ -154,9 +154,15 @@ while( 1 ) {
             $c = chop $req;
             $req .= $c if( $c ne "/" );
             
-            print STDOUT $route[$req];
-
-            traiterFichier();
+			if( exists $conf{"route"}{$req} ) {
+				$req = $conf{"route"}{$req};
+				traiterFichier();
+			} elsif ( exists $conf{"exec"}{$req} ) {
+				$req = $conf{"exec"}{$req};
+				respExec($req);
+			} else {
+				traiterFichier();
+			}
 
 		
 		    print $full_response;
@@ -177,20 +183,19 @@ while( 1 ) {
 sub defConfig
 {
     open(CONFIG,"comanche.conf");
-    undef $conf;
-
+    
     while (<CONFIG>) {
 
 	    # récupération des routes dans la liste route
 	    if( /route/ ) {
 	        @lignes = split(" ",$_);
-	        $conf{'route'}{$lignes[1]} = $lignes[3];
+	        $conf{"route"}{$lignes[1]} = $lignes[3];
 	    }
 	    
 	    # récuperation des executions dans la liste exe
 	    if( /exec/ ) {
 	        @lignes = split(" ",$_);
-	        $conf{'exe'}{$lignes[1]} = $lignes[3];
+	        $conf{"exec"}{$lignes[1]} = $lignes[3];
 	    }
         
         # récuperation des variables
@@ -200,7 +205,7 @@ sub defConfig
 	        } elsif( $1 eq "default" ) {
 	            die( "Le fichier par défaut dans le .conf n'existe pas.\n" ) unless ( -f $2 );
 	        }
-	        $conf{'general'}{$1} = $2;
+	        ${$1}= $2;
 	    } 
     }
     
@@ -236,7 +241,7 @@ sub writelog
 	
 	# Ecriture dans le log
 	my $line = "$date;$type;$machine;$requete;$projection;$reponse\n";
-	open( LOG, ">>$conf{'general'}{'logfile'}" );
+	open( LOG, ">>$logfile" );
 	print LOG $line;
 	close( LOG );
 }
@@ -251,26 +256,39 @@ sub traiterFichier {
     # Recherche dans le repertoire de base
     $req =~ /.*\.(.*)/;
     
-    if( -f "$conf{'general'}{'basedir'}$req" && ( $1 eq "html" || $1 eq "txt" || $1 eq "jpg" || $1 eq "css" ) ) {
-    
-        # Si un fichier correspond
-        $type = mimetype($req);
-        respFile("$conf{'general'}{'basedir'}$req", $type, "200 OK");
-    } elsif( -d "$conf{'general'}{'$basedir'}$req" ) {
-        if( -f "$conf{'general'}{'basedir'}$req/$conf{'general'}{'index'}" ) {
-            
-            # Si il y a un fichier index.html dans le dossier
-            respFile( "$conf{'general'}{'basedir'}$req/$conf{'index'}{'index'}", "text/html", "200 OK");
-        } else {
-            
-            # Sinon
-            respListFile($req);
-        }
-    } elsif( -x "$conf{'general'}{'basedir'}$req" ) {
-        respExec($req);
-    } else {
-        err404();
-    }
+	if( -f $req ) {
+		$type = mimetype($req);
+		respFile($req, $type, "200 OK");
+	} elsif( -d $req ) {
+		if( -f $req."/".$index ) {
+			respFile( $req."/".$index, "text/html", "200 OK");
+		} else {
+			respListFile($req);
+		}
+	} elsif( -x $req ) {
+		respExec($req);
+	} else {
+	    if( -f $basedir.$req ) {
+	    
+	        # Si un fichier correspond
+	        $type = mimetype($req);
+	        respFile($basedir.$req, $type, "200 OK");
+	    } elsif( -d $basedir.$req ) {
+	        if( -f $basedir.$req."/".$index ) {
+	            
+	            # Si il y a un fichier index.html dans le dossier
+	            respFile( $basedir.$req."/".$index, "text/html", "200 OK");
+	        } else {
+	            
+	            # Sinon
+	            respListFile($basedir.$req);
+	        }
+	    } elsif( -x $basedir.$req ) {
+	        respExec($basedir.$req);
+	    } else {
+	        err404();
+		}
+	}
 }
 
 
@@ -287,13 +305,13 @@ sub err400
                 "Votre requête n'est pas valide".
                 "</body></html>";
     resp("404 Bad Request", "text/html");
-    writelog("get-s", "$ip", "$request", "error", "400 Bad Request");
+    writelog("get-s", $ip, $request, "error", "400 Bad Request");
 }
 
 # Retourne la page de base en erreur 404
 sub err404
 {
-    respFile($conf{'general'}{'default'}, "text/html", "404 Not Found");
+    respFile($default, "text/html", "404 Not Found");
 }
 
 # Crée une page répertoriant le contenu d'un dossier
@@ -307,10 +325,10 @@ sub respListFile
                 "<h2>$dir</h2>".
                 "<ul>";
     
-    opendir( REP, "$conf{'general'}{'basedir'}$dir" );
+    opendir( REP, $dir );
     for $f ( sort readdir( REP ) ) {
         $path = "$dir\/$f";
-        if( -d "$conf{'general'}{'basedir'}$path" ) {
+        if( -d $path ) {
             $class = " class='dossier' ";
         } else {
             $class = "";
@@ -321,7 +339,7 @@ sub respListFile
     $reponse .= "</ul>".
                 "</body></html>";
     resp( "200 OK", "text/html" );
-    writelog("get-s", "$ip", "$request", "$conf{'general'}{'basedir'}$req", "200 OK");
+    writelog("get-s", $ip, $request, $basedir.$req, "200 OK");
 }
 
 # Exécute un script
@@ -329,9 +347,9 @@ sub respListFile
 #   - file to exec
 sub respExec {
     $file = shift;
-    $reponse = "<html><body>".qx/$basedir$file$parameter/."</body></html>";
+    $reponse = "<html><body>".qx/$file$parameter/."</body></html>";
     resp( "200 OK", "text/html" );
-    writelog("get-d", "$ip", "$request", "$conf{'general'}{'basedir'}$file", "200 OK");
+    writelog("get-d", $ip, $request, $file, "200 OK");
 }
 
 # Lit un fichier
@@ -352,7 +370,7 @@ sub respFile
     $type = shift;
     $code = shift;
     resp($type, $code);
-    writelog("get-s", "$ip", "$request", "$file", "$code");
+    writelog("get-s", $ip, $request, $file, $code);
 }
 
 # param :
