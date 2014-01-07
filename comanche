@@ -23,7 +23,7 @@ $SIG{'USR1'} = sub {
 # Handler de statut du programme
 $SIG{'USR2'} = sub {
     print STDOUT "Nombre de requêtes reçues : $reqrecues.\n";
-    print STDOUT "Nombre de requêtes traitées : $reqtraitees.\n";
+    
 };
 
 
@@ -142,6 +142,7 @@ while( 1 ) {
 		    chop $request;
 		    chop $request;
 		    $request =~ /^GET (.*) HTTP\/1\.1/ || err400;
+		
             $req = $1;
             $req =~ /(.*)\?(.*)/;
             $req = $2;
