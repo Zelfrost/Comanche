@@ -20,9 +20,15 @@ $SIG{'USR1'} = sub {
 	exit 0;
 };
 
-# Handler de statut du programme
-$SIG{'USR2'} = sub {
-    print STDOUT "Nombre de requêtes reçues : $reqrecues.\n";
+# Handler de statut du programme (afficher le PID du processus principal)
+$SIG{'USR2'} = sub { 
+	open (PID, "pid");
+	while (<PID>)
+	{
+		print STDOUT "PID du processur principal $_\n";
+	}
+	close(PID);
+	print STDOUT "Nombre de requêtes reçues : $reqrecues.\nNombre de requêtes traitées: $reqtraitees.\nIl y a $i clients\n Les PID: @AllPID\n";
     
 };
 
@@ -119,6 +125,7 @@ while( 1 ) {
 
 	    # Creation d'un fils pour le client
         $pid = fork();
+	push (@AllPID,$pid);
         
         if( $pid != 0 ) {
 
@@ -151,6 +158,7 @@ while( 1 ) {
                 $p =~ /.*=(.*)/;
                 $parameter .= " $1";
             }
+	
             $req = $1;
             $c = chop $req;
             $req .= $c if( $c ne "/" );
@@ -172,6 +180,7 @@ while( 1 ) {
 		    exit 0;
 		
 	    }
+	
     }
 }
 
@@ -307,12 +316,16 @@ sub err400
                 "</body></html>";
     resp("404 Bad Request", "text/html");
     writelog("get-s", $ip, $request, "error", "400 Bad Request");
+	
+
 }
 
 # Retourne la page de base en erreur 404
 sub err404
 {
     respFile($default, "text/html", "404 Not Found");
+	
+
 }
 
 # Crée une page répertoriant le contenu d'un dossier
