@@ -15,8 +15,14 @@ $SIG{CHLD} = sub {
 # Handler de terminaison du programme
 $SIG{'USR1'} = sub {
 	writelog("stop");
+    unlink 'pid';
 	close( SOCKET );
 	exit 0;
+};
+
+# Handler de statut du programme
+$SIG{'USR2'} = sub {
+    print STDOUT "Nombre de requêtes reçues : $reqrecues.\n";
 };
 
 
@@ -44,14 +50,17 @@ if( $ARGV[0] eq "start" ) {
 	open( PID, "pid" );
 	kill( 'USR1', <PID> );
 	close( PID );
+
 	exit 0;
 }
 elsif ( $ARGV[0] eq "status" ) {
-	
-	# Si demande du status de serveur
-	print "Nombre de requête traitées:  $reqrecues\n";
+    
+    # Si demande de statut
+    open( PID, "pid" );
+	kill( 'USR2', <PID> );
+    close( PID );
+    
 	exit O;
-	
 }
  else {
 	
@@ -91,8 +100,8 @@ writelog("start");
 # Boucle principale du serveur
 while( 1 ) {
     accept( CLIENT, SOCKET ) or next;
-	$reqrecues += 1;
-	
+	$reqrecues ++;
+
 	# Test du nombre de fils
 	if ( $i >= $clients ) {
 		$reponse =  "<html><body>".
@@ -111,7 +120,7 @@ while( 1 ) {
         $pid = fork();
         
         if( $pid != 0 ) {
-            
+
             # Incrémente le nombre de fils
             $i ++;
             close( CLIENT );
