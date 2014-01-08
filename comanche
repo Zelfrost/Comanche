@@ -13,7 +13,7 @@ $SIG{CHLD} = sub {
 
 
 # Handler de terminaison du programme
-$SIG{'USR1'} = sub {
+$SIG{'QUIT'} = sub {
 	writelog("stop");
     unlink 'pid';
 	close( SOCKET );
@@ -21,7 +21,7 @@ $SIG{'USR1'} = sub {
 };
 
 # Handler de statut du programme (afficher le PID du processus principal)
-$SIG{'USR2'} = sub { 
+$SIG{'USR1'} = sub { 
 	open (PID, "pid");
 	while (<PID>)
 	{
@@ -30,6 +30,10 @@ $SIG{'USR2'} = sub {
 	close(PID);
     my $fils = @allPID;
 	print STDOUT "Nombre de requêtes reçues : $reqRecues.\nNombre de requêtes traitées: $reqTraitees.\nIl y a $fils clients\n Les PID: @allPID\n";
+};
+
+$SIG{'USR2'} = sub { 
+	defConfig();
 };
 
 use Socket;
@@ -54,21 +58,27 @@ if( $ARGV[0] eq "start" ) {
 	
 	# Si arrêt du serveur
 	open( PID, "pid" );
-	kill( 'USR1', <PID> );
+	kill( 'QUIT', <PID> );
 	close( PID );
 
 	exit 0;
-}
-elsif ( $ARGV[0] eq "status" ) {
+} elsif ( $ARGV[0] eq "status" ) {
     
     # Si demande de statut
+    open( PID, "pid" );
+	kill( 'USR1', <PID> );
+    close( PID );
+    
+	exit O;
+} elsif ( $ARGV[0] eq "reload" ) {
+	
+	# Si demande de rechargement de la configuration
     open( PID, "pid" );
 	kill( 'USR2', <PID> );
     close( PID );
     
-	exit O;
-}
- else {
+	exit 0;
+} else {
 	
 	# Si pas d'argument
 	exit 1;
@@ -192,7 +202,7 @@ while( 1 ) {
 sub defConfig
 {
     open(CONFIG,"comanche.conf");
-    
+    undef %conf;
     while (<CONFIG>) {
 
 	    # récupération des routes dans la liste route
