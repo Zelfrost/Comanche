@@ -7,8 +7,8 @@
 
 # Handler sur la mort des fils
 $SIG{CHLD} = sub {
-	$i --;
-	wait();
+    $child = wait();
+    deleteChild($child);
 };
 
 
@@ -28,16 +28,15 @@ $SIG{'USR2'} = sub {
 		print STDOUT "PID du processur principal $_\n";
 	}
 	close(PID);
-	print STDOUT "Nombre de requêtes reçues : $reqrecues.\nNombre de requêtes traitées: $reqtraitees.\nIl y a $i clients\n Les PID: @AllPID\n";
-    
+    my $fils = @allPID;
+	print STDOUT "Nombre de requêtes reçues : $reqRecues.\nNombre de requêtes traitées: $reqTraitees.\nIl y a $fils clients\n Les PID: @allPID\n";
 };
-
 
 use Socket;
 use File::MimeInfo;
 
-$reqrecues      = 0;
-$reqtraitees    = 0;
+$reqRecues      = 0;
+$reqTraitees    = 0;
 
 
 # Test sur le parametre
@@ -107,10 +106,11 @@ writelog("start");
 # Boucle principale du serveur
 while( 1 ) {
     accept( CLIENT, SOCKET ) or next;
-	$reqrecues ++;
+	$reqRecues  ++;
 
 	# Test du nombre de fils
-	if ( $i >= $clients ) {
+    $fils = @allPID;
+	if ( $fils >= $clients ) {
 		$reponse =  "<html><body>".
 		            "<h3>503 Service Unavailable</h3>".
 		            "Trop de connexions en simultannees".
@@ -118,19 +118,18 @@ while( 1 ) {
         resp( "text/html", "503 Service Unavailable" );
         writelog("get-s", "", "", "error", "503 Service Unavailable");
 		
-	    print $full_response;
+	    print CLIENT $full_response;
 	
         close( CLIENT );
 	} else {
+        $reqTraitees ++;
 
 	    # Creation d'un fils pour le client
         $pid = fork();
-	push (@AllPID,$pid);
+	    push( @allPID, $pid );
         
         if( $pid != 0 ) {
-
-            # Incrémente le nombre de fils
-            $i ++;
+            
             close( CLIENT );
         } else {
 		
@@ -279,7 +278,7 @@ sub traiterFichier {
 		respExec($req);
 	} else {
 	    if( -f $basedir.$req ) {
-	    
+	        
 	        # Si un fichier correspond
 	        $type = mimetype($req);
 	        respFile($basedir.$req, $type, "200 OK");
@@ -314,18 +313,14 @@ sub err400
                 "<h3>400 Bad Request</h3>".
                 "Votre requête n'est pas valide".
                 "</body></html>";
-    resp("404 Bad Request", "text/html");
+    resp("400 Bad Request", "text/html");
     writelog("get-s", $ip, $request, "error", "400 Bad Request");
-	
-
 }
 
 # Retourne la page de base en erreur 404
 sub err404
 {
     respFile($default, "text/html", "404 Not Found");
-	
-
 }
 
 # Crée une page répertoriant le contenu d'un dossier
@@ -395,4 +390,19 @@ sub resp
         "Content-Type: ".shift."\r\n" .
         "Content-Length: ".length($reponse)."\r\n\r\n" .
         $reponse;
+}
+
+# param :
+#   - le fils a retirer
+sub deleteChild
+{
+    my $child = shift;
+    my @nouv;
+
+    for( my $i=0; $i<scalar(@allPID); $i++)
+    {
+        push(@nouv, $allPID[$i]) if ($allPID[$i] != $child);
+    }
+    
+    @allPID = @nouv;
 }
