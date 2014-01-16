@@ -43,6 +43,8 @@ Implémentation
 
 Détaillez ici ce qui, **selon vous**, est important à savoir pour l'évaluation du respect du cahier des charges (par exemple manière dont est gardé l'accès au processus, détermination du type du fichier à utiliser dans la réponse HTTP via les extensions des noms de fichiers, etc.).
 
+Afin de garder un accès au processus, un fichier nommé pid contenant le PID du processus principal est créé lors du lancement du serveur. Ce fichier est détruit lors de l'arrêt. Les types de fichiers sont déterminés grâce à la commande MIMETYPE. Les différents erreurs sont gérées grâce à différentes fonctions, sauf la 503 qui est gérée dans le code principal puisqu'elle est déclenchée différemment des autres. Lors du traitement de la requete, le traitement se fait d'abord sans, puis avec le basedir, afin de retourner les fichiers locaux en priorité.
+
 Gestion
 -------
 
