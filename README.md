@@ -1,4 +1,3 @@
-
 Projet
 ======
 
@@ -44,6 +43,8 @@ Gestion
 -------
 
 Expliquez ici en quelques lignes comment a été faite la répartition des tâches dans le développement du projet entre les membres du binôme, puis supprimez cette ligne.
+
+Damien s'est occupé du corps général du script tandis que Constantin plutôt les fonctions annexes comme le fichier de configuration, les traitements d'erreurs.
 
 Autres
 ------
