@@ -1,0 +1,9 @@
+#!/bin/bash
+
+echo "<h1>Executable1</h1>Ceci est un fichier executable dont vous voyez le resultat"
+echo "<ul>"
+for i in {1..10}
+do
+	echo "<li>$i</li>"
+done
+echo "</ul>

@@ -1,0 +1,6 @@
+#!/usr/bin/perl
+
+$param = $ENV{"QUERY_STRING"};
+print "QUERY STRING : $param";
+print "<p>Ceci est un executable dont le premier parametre est : ".shift."</br>";
+print "Son second parametre est : ".shift."</p>";

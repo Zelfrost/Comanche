@@ -154,21 +154,28 @@ while( 1 ) {
             $|= 1;
 		
 		    $request = <CLIENT>;
-                    
-		    chop $request;
-		    chop $request;
-		    $request =~ /^GET (.*) HTTP\/1\.1/ || err400;
+            
+		    if( $request =~ /^GET (.*) HTTP\/1\.1\r?\n/ ) {
+		    	$ligne = <CLIENT>;
+		    	print STDOUT $ligne;
+		    	if( $ligne =~ /^(Host: )/i ) {
+		    		$ligne = <CLIENT>;
+		    		print STDOUT $ligne;
+		    		if( ! $ligne =~ /^(\r\n)/ ) {
+		    			err400();
+		    		}
+		    	} else {
+		    		err400();
+		    	}
+		    } else {
+		    	err400();
+		    }
 		
             $req = $1;
             $req =~ /(.*)\?(.*)/;
-            $req = $2;
-            @param = split("&", $req);
-            for $p ( @param ) {
-                $p =~ /.*=(.*)/;
-                $parameter .= " $1";
-            }
-	
             $req = $1;
+            $parameter = $2;
+	
             $c = chop $req;
             $req .= $c if( $c ne "/" );
             
@@ -325,6 +332,10 @@ sub err400
                 "</body></html>";
     resp("400 Bad Request", "text/html");
     writelog("get-s", $ip, $request, "error", "400 Bad Request");
+
+	print $full_response;
+    close( CLIENT );
+    exit 0;
 }
 
 # Retourne la page de base en erreur 404
@@ -366,7 +377,8 @@ sub respListFile
 #   - file to exec
 sub respExec {
     $file = shift;
-    $reponse = "<html><body>".qx/$file$parameter/."</body></html>";
+    $ENV{'QUERY_STRING'} = $parameter;
+    $reponse = "<html><body>".qx/$file/."</body></html>";
     resp( "200 OK", "text/html" );
     writelog("get-d", $ip, $request, $file, "200 OK");
 }
@@ -388,7 +400,7 @@ sub respFile
     
     $type = shift;
     $code = shift;
-    resp($type, $code);
+    resp($code, $type);
     writelog("get-s", $ip, $request, $file, $code);
 }
 
